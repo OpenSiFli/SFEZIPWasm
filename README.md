@@ -58,7 +58,7 @@ static pngToEzip(pngData, colorType, ezip_color_type, ezip_bin_type, boardType)
 
 - 序列帧
 
-```
+```javascript
   /**
      * Convert a set of png images
      * @param pngData png data as arraylist, will be converted in the order of the images in the arraylist
@@ -78,7 +78,7 @@ static pngToEzip(pngData, colorType, ezip_color_type, ezip_bin_type, boardType)
 
 - 设置lvgl版本
 
-```
+```javascript
  /**
      * 设置lvgl version 7/8/9
      * */
@@ -87,7 +87,7 @@ static pngToEzip(pngData, colorType, ezip_color_type, ezip_bin_type, boardType)
 
 - gzip
 
-```
+```javascript
  /**
      * gzip 数据压缩
      * @param inData 输入原始数据
@@ -99,7 +99,7 @@ static pngToEzip(pngData, colorType, ezip_color_type, ezip_bin_type, boardType)
 ## 3.测试
 将本仓库下载到本地
 
-```
+```bash
 cd SFEZIPWasm
 在根目录启动HTTP 服务
 python3 -m http.server 8080
