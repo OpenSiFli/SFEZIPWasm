@@ -2,7 +2,9 @@
 SFEZIPWasm 是eZIPSDK的WebAssembly版本。
 
 ## 1.初始化
-```
+```javascript
+ <script src="/build-wasm/ezip_wasm.js"></script>
+   
  import { SifliEzipUtil, SFBoardType, SFEZIPColorType } from '../wrapper/SifliEzipUtil.js';
  // 加载并注入 Wasm 实例
   const wasmInstance = await EZIPWasm();
