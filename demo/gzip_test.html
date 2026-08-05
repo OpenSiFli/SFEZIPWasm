@@ -1,0 +1,450 @@
+<!-- demo/gzip_test.html -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SFEZIPWasm GZIP 测试</title>
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+
+    <h1>📦 SFEZIPWasm GZIP 测试</h1>
+    <p class="subtitle">选择包含任意文件的目录，批量进行 GZIP 压缩</p>
+
+    <!-- 配置区域 -->
+    <div class="card">
+        <div class="card-title">📁 目录选择</div>
+        <div class="row">
+            <label>目录:</label>
+            <span id="pathDisplay" class="path-display empty">未选择目录</span>
+            <button id="btnSelectDir" class="btn btn-primary">选择目录</button>
+        </div>
+        <div class="row mt-8" style="font-size:13px;color:#888;">
+            <span>📌 将处理目录第一层中的所有文件（不限类型）</span>
+        </div>
+    </div>
+
+    <!-- 控制区域 -->
+    <div class="card">
+        <div class="card-title">⚙️ 测试控制</div>
+        <div class="row">
+            <button id="btnStart" class="btn btn-success" disabled>开始测试</button>
+            <button id="btnClear" class="btn" style="margin-left:auto;">清空日志</button>
+            <span id="statusBadge" class="badge badge-info">就绪</span>
+        </div>
+
+        <!-- 进度 -->
+        <div class="progress-section">
+            <div class="flex">
+                <span class="progress-label" id="progressText">等待开始...</span>
+                <span class="stats ml-auto" id="statsText">总计: 0 | 成功: 0 | 失败: 0</span>
+            </div>
+            <div class="progress-bar-bg">
+                <div class="progress-bar-fill" id="progressFill" style="width:0%;"></div>
+            </div>
+        </div>
+
+        <!-- 日志 -->
+        <div class="log-area" id="logArea">
+            <span class="log-empty">📋 日志将显示在这里...</span>
+        </div>
+    </div>
+
+   <script src="/build-wasm/ezip_wasm.js"></script>
+
+    <script type="module">
+        // ============================================
+        // 导入 SifliEzipUtil
+        // ============================================
+        import { SifliEzipUtil } from '../wrapper/SifliEzipUtil.js';
+        
+        // 加载并注入 Wasm 实例
+        const wasmInstance = await EZIPWasm();
+        console.log('instance 的属性:', Object.getOwnPropertyNames(wasmInstance));
+        console.log('instance.HEAPU8:', wasmInstance.HEAPU8);
+        console.log('instance._malloc:', wasmInstance._malloc);
+        console.log('instance.cwrap:', wasmInstance.cwrap);
+        console.log('instance.memory:', wasmInstance.memory);
+        console.log('instance.wasmMemory:', wasmInstance.wasmMemory);
+        SifliEzipUtil.setModule(wasmInstance);
+
+        // ============================================
+        // DOM 引用
+        // ============================================
+        const pathDisplay = document.getElementById('pathDisplay');
+        const btnSelectDir = document.getElementById('btnSelectDir');
+        const btnStart = document.getElementById('btnStart');
+        const btnClear = document.getElementById('btnClear');
+        const statusBadge = document.getElementById('statusBadge');
+        const progressText = document.getElementById('progressText');
+        const statsText = document.getElementById('statsText');
+        const progressFill = document.getElementById('progressFill');
+        const logArea = document.getElementById('logArea');
+
+        // ============================================
+        // 状态
+        // ============================================
+        let selectedDir = null;
+        let selectedDirName = '';
+        let fileList = [];
+        let isRunning = false;
+        let binDataList = [];
+
+        // ============================================
+        // 日志函数
+        // ============================================
+        function log(message, type = 'info') {
+            const emptySpan = logArea.querySelector('.log-empty');
+            if (emptySpan) {
+                emptySpan.remove();
+            }
+
+            const line = document.createElement('div');
+            const timestamp = new Date().toLocaleTimeString();
+            line.textContent = `[${timestamp}] ${message}`;
+
+            switch (type) {
+                case 'success':
+                    line.className = 'log-success';
+                    break;
+                case 'error':
+                    line.className = 'log-error';
+                    break;
+                case 'warn':
+                    line.className = 'log-warn';
+                    break;
+                case 'info':
+                default:
+                    line.className = 'log-info';
+                    break;
+            }
+
+            logArea.appendChild(line);
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        function clearLog() {
+            logArea.innerHTML = '';
+            const empty = document.createElement('span');
+            empty.className = 'log-empty';
+            empty.textContent = '📋 日志将显示在这里...';
+            logArea.appendChild(empty);
+        }
+
+        // ============================================
+        // 更新进度 UI
+        // ============================================
+        function updateProgress(processed, success, total, currentFile = '') {
+            const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
+            progressFill.style.width = `${pct}%`;
+            progressText.textContent = `处理: ${processed}/${total} ${currentFile ? ' - ' + currentFile : ''}`;
+            statsText.textContent = `总计: ${total} | 成功: ${success} | 失败: ${processed - success}`;
+
+            if (isRunning) {
+                statusBadge.textContent = '🔄 运行中...';
+                statusBadge.className = 'badge badge-info';
+            } else if (processed === total && total > 0) {
+                if (processed === success) {
+                    statusBadge.textContent = '✅ 全部完成';
+                    statusBadge.className = 'badge badge-success';
+                } else {
+                    statusBadge.textContent = '⚠️ 部分失败';
+                    statusBadge.className = 'badge badge-error';
+                }
+            }
+        }
+
+        // ============================================
+        // 读取文件为 Uint8Array
+        // ============================================
+        async function readFileAsUint8Array(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    resolve(new Uint8Array(reader.result));
+                };
+                reader.onerror = () => {
+                    reject(new Error(`读取文件失败: ${file.name}`));
+                };
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        // ============================================
+        // 收集 bin 数据到列表
+        // ============================================
+        function addResultToList(data, fileName) {
+            const baseName = fileName.replace(/\.[^.]+$/, '');
+            const binFileName = baseName + '.gz';
+            binDataList.push({
+                fileName: binFileName,
+                data: data
+            });
+        }
+
+        // ============================================
+        // 打包下载所有文件为 ZIP
+        // ============================================
+        function downloadAllAsZip(zipName) {
+            if (binDataList.length === 0) {
+                log('⚠️ 没有数据可打包', 'warn');
+                return;
+            }
+
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+            script.onload = () => {
+                const zip = new JSZip();
+                for (const item of binDataList) {
+                    zip.file(item.fileName, item.data);
+                }
+                
+                log(`💾 正在打包 ${binDataList.length} 个文件为 ${zipName}.zip...`, 'info');
+                
+                zip.generateAsync({ type: 'blob' }).then((blob) => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = zipName + '.zip';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    log(`✅ 已下载 ${zipName}.zip (${(blob.size / 1024).toFixed(1)} KB)`, 'success');
+                });
+            };
+            script.onerror = () => {
+                log('❌ 加载 JSZip 失败，请检查网络', 'error');
+            };
+            document.head.appendChild(script);
+        }
+
+        // ============================================
+        // 获取目录中的文件（全部文件，不限类型）
+        // ============================================
+        async function getFilesFromDirectory(dirHandle) {
+            const files = [];
+            for await (const entry of dirHandle.values()) {
+                if (entry.kind === 'file') {
+                    try {
+                        const file = await entry.getFile();
+                        files.push({
+                            name: entry.name,
+                            file: file,
+                            handle: entry
+                        });
+                    } catch (err) {
+                        log(`⚠️ 跳过文件 "${entry.name}": ${err.message}`, 'warn');
+                    }
+                }
+            }
+            return files;
+        }
+
+        // ============================================
+        // 选择目录
+        // ============================================
+        async function selectDirectory() {
+            try {
+                if ('showDirectoryPicker' in window) {
+                    const dirHandle = await window.showDirectoryPicker();
+                    selectedDir = dirHandle;
+                    selectedDirName = dirHandle.name;
+                    pathDisplay.textContent = dirHandle.name;
+                    pathDisplay.className = 'path-display';
+                    btnStart.disabled = false;
+                    log(`📁 已选择目录: ${dirHandle.name}`, 'info');
+
+                    fileList = await getFilesFromDirectory(dirHandle);
+                    log(`📄 找到 ${fileList.length} 个文件`, 'info');
+                    if (fileList.length > 0) {
+                        const names = fileList.map(f => f.name).join(', ');
+                        log(`   ${names}`, 'info');
+                    } else {
+                        log('⚠️ 目录中没有找到任何文件', 'warn');
+                        btnStart.disabled = true;
+                    }
+                    return;
+                }
+
+                log('⚠️ 当前浏览器不支持 showDirectoryPicker，使用文件多选模式', 'warn');
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.multiple = true;
+                input.webkitdirectory = true;
+
+                input.onchange = () => {
+                    const files = Array.from(input.files);
+                    if (files.length === 0) {
+                        pathDisplay.textContent = '未选择文件';
+                        pathDisplay.className = 'path-display empty';
+                        btnStart.disabled = true;
+                        return;
+                    }
+
+                    const firstPath = files[0].webkitRelativePath || files[0].name;
+                    const dirName = firstPath.split('/')[0] || '未命名目录';
+                    selectedDirName = dirName;
+                    pathDisplay.textContent = dirName;
+                    pathDisplay.className = 'path-display';
+
+                    fileList = files.map(f => ({
+                        name: f.name,
+                        file: f,
+                        handle: null
+                    }));
+
+                    btnStart.disabled = false;
+                    log(`📁 已选择目录: ${dirName}`, 'info');
+                    log(`📄 找到 ${fileList.length} 个文件`, 'info');
+                };
+
+                input.click();
+
+            } catch (err) {
+                if (err.name === 'AbortError' || err.message?.includes('abort')) {
+                    log('已取消目录选择', 'warn');
+                } else {
+                    log(`❌ 选择目录失败: ${err.message}`, 'error');
+                    console.error(err);
+                }
+            }
+        }
+
+        // ============================================
+        // 执行测试 - GZIP 压缩
+        // ============================================
+        async function runTest() {
+            if (isRunning) return;
+            if (fileList.length === 0) {
+                log('⚠️ 没有文件可处理，请先选择目录', 'warn');
+                return;
+            }
+
+            // 清空之前的数据
+            binDataList = [];
+
+            isRunning = true;
+            btnStart.disabled = true;
+            btnSelectDir.disabled = true;
+
+            const total = fileList.length;
+            let processed = 0;
+            let success = 0;
+            const errors = [];
+
+            updateProgress(0, 0, total);
+            const startTime = Date.now();
+
+            for (const item of fileList) {
+                const fileName = item.name;
+                try {
+                    const data = await readFileAsUint8Array(item.file);
+
+                    // 🔥 调用 GZIP 压缩
+                    const result = SifliEzipUtil.gzipWithData(data);
+
+                    success++;
+                    
+                    if (result.length > 0) {
+                        addResultToList(result, fileName);
+                    }
+                    
+                    const ratio = data.length > 0 ? ((1 - result.length / data.length) * 100).toFixed(1) : 0;
+                    log(`✅ ${fileName} → ${result.length} 字节 (${(data.length / 1024).toFixed(1)}KB → ${(result.length / 1024).toFixed(1)}KB, 压缩率 ${ratio}%)`, 'success');
+
+                } catch (err) {
+                    errors.push({ file: fileName, error: err.message });
+                    log(`❌ ${fileName} 失败: ${err.message}`, 'error');
+                }
+
+                processed++;
+                updateProgress(processed, success, total, fileName);
+            }
+
+            // 打包下载 ZIP
+            if (binDataList.length > 0) {
+                const zipName = selectedDirName + '_gzip';
+                downloadAllAsZip(zipName);
+            } else {
+                log('⚠️ 没有成功生成任何 GZIP 数据', 'warn');
+            }
+
+            isRunning = false;
+            btnStart.disabled = false;
+            btnSelectDir.disabled = false;
+
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+            let resultMsg = `完成: ${success}/${total} 成功, ${total - success} 失败, 耗时 ${elapsed}s`;
+            resultMsg += `, 已生成 ${binDataList.length} 个 gz 文件`;
+            log(`📊 ${resultMsg}`, success === total ? 'success' : 'warn');
+
+            if (success === total) {
+                statusBadge.textContent = '✅ 全部完成';
+                statusBadge.className = 'badge badge-success';
+            } else if (success > 0) {
+                statusBadge.textContent = '⚠️ 部分失败';
+                statusBadge.className = 'badge badge-error';
+            } else {
+                statusBadge.textContent = '❌ 全部失败';
+                statusBadge.className = 'badge badge-error';
+            }
+
+            if (errors.length > 0) {
+                log(`📋 失败文件列表:`, 'warn');
+                for (const e of errors) {
+                    log(`   - ${e.file}: ${e.error}`, 'error');
+                }
+            }
+        }
+
+        // ============================================
+        // 事件绑定
+        // ============================================
+        btnSelectDir.addEventListener('click', selectDirectory);
+        btnStart.addEventListener('click', runTest);
+        btnClear.addEventListener('click', () => {
+            clearLog();
+            progressFill.style.width = '0%';
+            progressText.textContent = '等待开始...';
+            statsText.textContent = '总计: 0 | 成功: 0 | 失败: 0';
+            statusBadge.textContent = '就绪';
+            statusBadge.className = 'badge badge-info';
+            binDataList = [];
+        });
+
+        // ============================================
+        // 页面加载时自动初始化 Wasm
+        // ============================================
+        async function autoInit() {
+            try {
+                log('🔧 正在初始化 Wasm 模块...', 'info');
+                if (SifliEzipUtil._ready) {
+                    log(`✅ Wasm 模块已就绪 (版本 ${SifliEzipUtil.VersionStr})`, 'success');
+                } else {
+                    await SifliEzipUtil.init();
+                    log(`✅ Wasm 模块初始化成功 (版本 ${SifliEzipUtil.VersionStr})`, 'success');
+                }
+                statusBadge.textContent = '就绪';
+                statusBadge.className = 'badge badge-info';
+            } catch (err) {
+                log(`❌ Wasm 初始化失败: ${err.message}`, 'error');
+                log('💡 请确保 build-wasm/ezip_wasm.js 和 .wasm 文件存在', 'warn');
+                statusBadge.textContent = '❌ 初始化失败';
+                statusBadge.className = 'badge badge-error';
+            }
+        }
+
+        autoInit();
+
+        window.SifliEzipUtil = SifliEzipUtil;
+        window.log = log;
+
+        console.log('📦 SFEZIPWasm GZIP 测试页面已加载');
+        console.log(`📌 版本: ${SifliEzipUtil.VersionStr}`);
+        console.log('💡 使用 SifliEzipUtil 进行调试');
+    </script>
+
+</body>
+</html>
