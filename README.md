@@ -42,18 +42,19 @@ export const SFEZIPColorType = {
 - png -> ezip
 
 ```javascript
-/**
+	/**
      * transform png data to ezip bin, support gif to apng
-     * @param pngData png or gif data
-     * @param colorType color type @see SFEZIPColorType
-     * @param ezip_color_type
+     * @param {Uint8Array} pngData  png or gif data
+     * @param {number} colorType color type @see SFEZIPColorType
+     * @param {number} ezip_color_type
      * 0 keep original alpha channel
      * 1 no alpha channel
-     * @param ezip_bin_type
+     * @param {number} ezip_bin_type
      * set 0 to support rotation
      * set 1 for no rotation
-     * @param boardType @see SFBoardType
-     * @return ezip or apng result, null for fail
+     * @param {number} boardType @see SFBoardType
+     * @return {Uint8Array} ezip or apng result, null for fail
+     * @throws {Error} 参数无效或转换失败时抛出异常
      */
 static pngToEzip(pngData, colorType, ezip_color_type, ezip_bin_type, boardType)
 ```
@@ -62,7 +63,7 @@ static pngToEzip(pngData, colorType, ezip_color_type, ezip_bin_type, boardType)
 - 设置lvgl版本
 
 ```javascript
- /**
+ 	/**
      * 设置lvgl version 7/8/9
      * */
     static setLvglVersion(lvglVersion)
@@ -71,10 +72,10 @@ static pngToEzip(pngData, colorType, ezip_color_type, ezip_bin_type, boardType)
 - gzip
 
 ```javascript
- /**
+	/**
      * gzip 数据压缩
-     * @param inData 输入原始数据
-     * @return gzip数据，返回null失败。没有header和length,不需要做偏移.
+     * @param {Uint8Array} inData 输入原始数据
+     * @return {Uint8Array}gzip数据，返回null失败。没有header和length,不需要做偏移.
      * */
     static gzipWithData(inData)
 ```
