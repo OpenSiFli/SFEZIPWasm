@@ -75,7 +75,7 @@ static pngToEzip(pngData, colorType, ezip_color_type, ezip_bin_type, boardType)
 	/**
      * gzip 数据压缩
      * @param {Uint8Array} inData 输入原始数据
-     * @return {Uint8Array}gzip数据，返回null失败。没有header和length,不需要做偏移.
+     * @return {Uint8Array} gzip数据，返回null失败。没有header和length,不需要做偏移.
      * */
     static gzipWithData(inData)
 ```

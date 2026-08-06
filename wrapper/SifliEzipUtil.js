@@ -122,6 +122,20 @@ export class SifliEzipUtil {
     // 公共 API - 直接调用 _函数名
     // ============================================
 
+    /**
+     * transform png data to ezip bin, support gif to apng
+     * @param {Uint8Array} pngData  png or gif data
+     * @param {number} colorType color type @see SFEZIPColorType
+     * @param {number} ezip_color_type
+     * 0 keep original alpha channel
+     * 1 no alpha channel
+     * @param {number} ezip_bin_type
+     * set 0 to support rotation
+     * set 1 for no rotation
+     * @param {number} boardType @see SFBoardType
+     * @return {Uint8Array} ezip or apng result, null for fail
+     * @throws {Error} 参数无效或转换失败时抛出异常
+     */
     static pngToEzip(pngData, colorType, ezip_color_type, ezip_bin_type, boardType) {
         if (colorType === null || colorType === undefined) {
             throw new Error('colorType cannot be null');
@@ -164,6 +178,20 @@ export class SifliEzipUtil {
         return this._readAndFreeBuffer(outPtr, resultLen);
     }
 
+    /**
+     * Convert a set of png images
+     * @param {Uint8Array[]} pngData png data as arraylist, will be converted in the order of the images in the arraylist
+     * @param {number} colorType color type  @see SFEZIPColorType
+     * @param {number} ezip_color_type
+     * 0 keep original alpha channel
+     * 1 no alpha channel
+     * @param {number} ezip_bin_type
+     * set 0 to support rotation
+     * set 1 for no rotation
+     * @param {number} boardType @see SFBoardType
+     * @param {number} interval 动画间隔 0 默认间隔
+     * @return {Uint8Array} ezip or apng result, null for fail
+     */
     static pngToEzipSequence(pngDataArray, colorType, ezip_color_type, ezip_bin_type, boardType, interval) {
         const picNum = pngDataArray.length;
         console.info(`${this.VersionStr} color ${ezip_color_type}, bin ${ezip_bin_type}, board ${boardType}, pic number ${picNum}, interval ${interval}`);
@@ -226,6 +254,10 @@ export class SifliEzipUtil {
         return this._readAndFreeBuffer(outPtr, resultLen);
     }
 
+    /**
+     * 设置lvgl version 7/8/9
+     * @param {number} lvglVersion 7/8/9
+     * */
     static setLvglVersion(lvglVersion) {
         console.info(`setLvglVersion ${lvglVersion}`);
         this._checkReady();
@@ -233,6 +265,11 @@ export class SifliEzipUtil {
         this._module._set_lvgl_version(lvglVersion);
     }
 
+    /**
+     * gzip 数据压缩
+     * @param {Uint8Array} inData 输入原始数据
+     * @return {Uint8Array} gzip数据，返回null失败。没有header和length,不需要做偏移.
+     * */
     static gzipWithData(inData) {
         if (inData === null || inData === undefined) {
             throw new Error('inData cannot be null');
