@@ -1,6 +1,7 @@
 /**
  * SFEZIPWasm - EZip WebAssembly 包装层
- * 版本: 2.5.5
+ * 2.5.5 初始化
+ * 2.5.6 fix seq png -> ezip for lvgl 9
  */
 
 // ============================================
@@ -29,7 +30,7 @@ export const SFEZIPColorType = {
 // SifliEzipUtil - 核心工具类
 // ============================================
 export class SifliEzipUtil {
-    static VersionStr = "2.5.5";
+    static VersionStr = "2.5.6";
     static _module = null;
     static _ready = false;
 

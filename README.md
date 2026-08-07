@@ -59,6 +59,25 @@ export const SFEZIPColorType = {
 static pngToEzip(pngData, colorType, ezip_color_type, ezip_bin_type, boardType)
 ```
 
+- 序列帧
+
+```javascript
+/**
+     * Convert a set of png images
+     * @param {Uint8Array[]} pngData png data as arraylist, will be converted in the order of the images in the arraylist
+     * @param {number} colorType color type  @see SFEZIPColorType
+     * @param {number} ezip_color_type
+     * 0 keep original alpha channel
+     * 1 no alpha channel
+     * @param {number} ezip_bin_type
+     * set 0 to support rotation
+     * set 1 for no rotation
+     * @param {number} boardType @see SFBoardType
+     * @param {number} interval 动画间隔 0 默认间隔
+     * @return {Uint8Array} ezip or apng result, null for fail
+     */
+    static pngToEzipSequence(pngDataArray, colorType, ezip_color_type, ezip_bin_type, boardType, interval) 
+```
 
 - 设置lvgl版本
 
